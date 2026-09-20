@@ -16,11 +16,7 @@
     --muted:#a58fa0;
     --line:rgba(243,236,238,0.10);
     color-scheme: dark;
-    box-sizing:border-box;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
-  html{ scroll-padding-top: env(safe-area-inset-top, 0px); }
   *{ box-sizing:border-box; }
   html,body{
     height:100%;
@@ -34,6 +30,8 @@
     display:flex;
     flex-direction:column;
     height:100%;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .topbar{
@@ -41,7 +39,6 @@
     align-items:center;
     justify-content:space-between;
     padding:14px 18px 10px;
-    padding-top: calc(14px + env(safe-area-inset-top, 0px));
     flex-shrink:0;
   }
   .brand{
@@ -114,6 +111,7 @@
     text-align:center;
     padding:24px;
     background:var(--surface);
+    z-index:5;
   }
   .status button{
     margin-top:6px;
@@ -126,6 +124,14 @@
     font-size:14px;
     cursor:pointer;
   }
+  .spinner{
+    width:26px;height:26px;
+    border-radius:50%;
+    border:3px solid rgba(231,163,193,0.25);
+    border-top-color:var(--accent);
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
   .hidden{ display:none !important; }
 
   .review-img{
@@ -140,16 +146,59 @@
     background:var(--surface);
     border-top:1px solid var(--line);
     border-radius:24px 24px 0 0;
-    padding:16px 20px calc(18px + env(safe-area-inset-bottom, 0px));
+    padding:14px 20px calc(16px + env(safe-area-inset-bottom, 0px));
     display:flex;
     flex-direction:column;
-    gap:14px;
+    gap:12px;
   }
+
+  .ai-toggle-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding-bottom:2px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:2px;
+  }
+  .ai-toggle-row .label{
+    font-size:13px;
+    font-weight:600;
+  }
+  .ai-toggle-row .sub{
+    font-size:11px;
+    color:var(--muted);
+    font-weight:400;
+    margin-top:2px;
+  }
+  .switch{
+    position:relative;
+    width:44px; height:26px;
+    flex-shrink:0;
+  }
+  .switch input{ opacity:0; width:0; height:0; }
+  .switch .track{
+    position:absolute; inset:0;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:999px;
+    transition:background .2s ease;
+    cursor:pointer;
+  }
+  .switch .thumb{
+    position:absolute;
+    top:2px; left:3px;
+    width:20px; height:20px;
+    border-radius:50%;
+    background:var(--muted);
+    transition:transform .2s ease, background .2s ease;
+  }
+  .switch input:checked + .track{ background:rgba(231,163,193,0.25); }
+  .switch input:checked + .track .thumb{ transform:translateX(17px); background:var(--accent); }
 
   .sliders{
     display:flex;
     flex-direction:column;
-    gap:12px;
+    gap:10px;
   }
   .slider-row{
     display:flex;
@@ -157,11 +206,12 @@
     gap:12px;
   }
   .slider-row label{
-    width:56px;
+    width:64px;
     flex-shrink:0;
     font-size:12.5px;
     color:var(--muted);
   }
+  .slider-row.ai label{ color:var(--accent-soft); }
   .slider-row input[type=range]{
     flex:1;
     -webkit-appearance:none;
@@ -171,6 +221,7 @@
     background:var(--surface-2);
     outline:none;
   }
+  .slider-row input[type=range]:disabled{ opacity:0.35; }
   .slider-row input[type=range]::-webkit-slider-thumb{
     -webkit-appearance:none;
     width:18px;height:18px;
@@ -188,7 +239,7 @@
     cursor:pointer;
   }
   .slider-row .val{
-    width:30px;
+    width:28px;
     text-align:right;
     font-size:12px;
     color:var(--muted);
@@ -265,6 +316,8 @@
     pointer-events:none;
     transition:opacity .25s ease;
     z-index:20;
+    max-width:80%;
+    text-align:center;
   }
   .toast.show{ opacity:1; }
 </style>
@@ -288,6 +341,17 @@
   </div>
 
   <div class="panel" id="livePanel">
+    <div class="ai-toggle-row">
+      <div>
+        <div class="label">AI 뷰티 모드</div>
+        <div class="sub">얼굴 인식 기반 동안·대칭 보정</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="aiToggle">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+
     <div class="sliders">
       <div class="slider-row">
         <label for="soft">뽀샤시</label>
@@ -304,7 +368,18 @@
         <input type="range" id="tone" min="-50" max="50" value="0">
         <span class="val" id="toneVal">0</span>
       </div>
+      <div class="slider-row ai">
+        <label for="aging">동안 보정</label>
+        <input type="range" id="aging" min="0" max="100" value="55" disabled>
+        <span class="val" id="agingVal">55</span>
+      </div>
+      <div class="slider-row ai">
+        <label for="symmetry">대칭 보정</label>
+        <input type="range" id="symmetry" min="0" max="100" value="30" disabled>
+        <span class="val" id="symmetryVal">30</span>
+      </div>
     </div>
+
     <div class="controls-row">
       <button class="side-btn" id="resetBtn" title="필터 초기화">↺</button>
       <div class="shutter" id="shutterBtn" title="촬영"></div>
@@ -321,193 +396,438 @@
 
   <div class="toast" id="toast"></div>
 
-<script>
-(function(){
-  const video = document.createElement('video');
-  video.setAttribute('playsinline','');
-  video.muted = true;
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-  const statusEl = document.getElementById('status');
-  const startBtn = document.getElementById('startBtn');
-  const flipBtn = document.getElementById('flipBtn');
-  const shutterBtn = document.getElementById('shutterBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  const reviewImg = document.getElementById('reviewImg');
-  const livePanel = document.getElementById('livePanel');
-  const reviewPanel = document.getElementById('reviewPanel');
-  const retakeBtn = document.getElementById('retakeBtn');
-  const saveBtn = document.getElementById('saveBtn');
-  const toastEl = document.getElementById('toast');
+const video = document.createElement('video');
+video.setAttribute('playsinline','');
+video.muted = true;
 
-  const softSlider = document.getElementById('soft');
-  const brightSlider = document.getElementById('bright');
-  const toneSlider = document.getElementById('tone');
-  const softVal = document.getElementById('softVal');
-  const brightVal = document.getElementById('brightVal');
-  const toneVal = document.getElementById('toneVal');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const bufA = document.createElement('canvas'); // mirrored + color-filtered raw frame
+const bufB = document.createElement('canvas'); // soft-focused version of bufA
+const bufCtxA = bufA.getContext('2d');
+const bufCtxB = bufB.getContext('2d');
 
-  let stream = null;
-  let facingMode = 'user';
-  let rafId = null;
-  let lastPhotoDataUrl = null;
-  let downloadsCap = null;
+const statusEl = document.getElementById('status');
+const startBtn = document.getElementById('startBtn');
+const flipBtn = document.getElementById('flipBtn');
+const shutterBtn = document.getElementById('shutterBtn');
+const resetBtn = document.getElementById('resetBtn');
+const reviewImg = document.getElementById('reviewImg');
+const livePanel = document.getElementById('livePanel');
+const reviewPanel = document.getElementById('reviewPanel');
+const retakeBtn = document.getElementById('retakeBtn');
+const saveBtn = document.getElementById('saveBtn');
+const toastEl = document.getElementById('toast');
+const aiToggle = document.getElementById('aiToggle');
 
-  function showToast(msg){
-    toastEl.textContent = msg;
-    toastEl.classList.add('show');
-    setTimeout(()=> toastEl.classList.remove('show'), 1800);
-  }
+const softSlider = document.getElementById('soft');
+const brightSlider = document.getElementById('bright');
+const toneSlider = document.getElementById('tone');
+const agingSlider = document.getElementById('aging');
+const symmetrySlider = document.getElementById('symmetry');
+const softVal = document.getElementById('softVal');
+const brightVal = document.getElementById('brightVal');
+const toneVal = document.getElementById('toneVal');
+const agingVal = document.getElementById('agingVal');
+const symmetryVal = document.getElementById('symmetryVal');
 
-  function updateLabels(){
-    softVal.textContent = softSlider.value;
-    brightVal.textContent = brightSlider.value;
-    toneVal.textContent = toneSlider.value;
-  }
-  [softSlider, brightSlider, toneSlider].forEach(s => s.addEventListener('input', updateLabels));
+let stream = null;
+let facingMode = 'user';
+let rafId = null;
+let lastPhotoDataUrl = null;
+
+let faceLandmarker = null;
+let aiReady = false;
+let aiLoading = false;
+let lastVideoTime = -1;
+let lastResults = null;
+
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(()=> toastEl.classList.remove('show'), 2200);
+}
+
+function updateLabels(){
+  softVal.textContent = softSlider.value;
+  brightVal.textContent = brightSlider.value;
+  toneVal.textContent = toneSlider.value;
+  agingVal.textContent = agingSlider.value;
+  symmetryVal.textContent = symmetrySlider.value;
+}
+[softSlider, brightSlider, toneSlider, agingSlider, symmetrySlider].forEach(s => s.addEventListener('input', updateLabels));
+updateLabels();
+
+resetBtn.addEventListener('click', () => {
+  softSlider.value = 45;
+  brightSlider.value = 30;
+  toneSlider.value = 0;
+  agingSlider.value = 55;
+  symmetrySlider.value = 30;
   updateLabels();
+});
 
-  resetBtn.addEventListener('click', () => {
-    softSlider.value = 45;
-    brightSlider.value = 30;
-    toneSlider.value = 0;
-    updateLabels();
-  });
+aiToggle.addEventListener('change', async () => {
+  if(aiToggle.checked){
+    agingSlider.disabled = false;
+    symmetrySlider.disabled = false;
+    if(!aiReady && !aiLoading){
+      await loadFaceLandmarker();
+    }
+  }else{
+    agingSlider.disabled = true;
+    symmetrySlider.disabled = true;
+  }
+});
 
-  async function startCamera(){
-    stopCamera();
-    statusEl.innerHTML = '<div>카메라를 불러오는 중...</div>';
+async function loadFaceLandmarker(){
+  aiLoading = true;
+  showToast('AI 얼굴 인식 모델을 불러오는 중이에요 (몇 초 걸려요)');
+  try{
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        delegate: "CPU"
+      },
+      outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: false,
+      runningMode: "VIDEO",
+      numFaces: 1
+    });
+    aiReady = true;
+    showToast('AI 뷰티 모드가 켜졌어요');
+  }catch(err){
+    showToast('AI 모델을 불러오지 못했어요. 인터넷 연결을 확인해주세요.');
+    aiToggle.checked = false;
+    agingSlider.disabled = true;
+    symmetrySlider.disabled = true;
+  }
+  aiLoading = false;
+}
+
+async function startCamera(){
+  stopCamera();
+  statusEl.innerHTML = '<div>카메라를 불러오는 중...</div>';
+  statusEl.classList.remove('hidden');
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facingMode, width:{ideal:960}, height:{ideal:960} },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    const w = video.videoWidth || 720;
+    const h = video.videoHeight || 720;
+    canvas.width = w; canvas.height = h;
+    bufA.width = w; bufA.height = h;
+    bufB.width = w; bufB.height = h;
+    statusEl.classList.add('hidden');
+    renderLoop();
+  }catch(err){
+    statusEl.innerHTML = '<div>카메라를 사용할 수 없어요.<br>브라우저 권한을 확인해주세요.</div><button id="startBtn2">다시 시도</button>';
     statusEl.classList.remove('hidden');
-    try{
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode, width:{ideal:1080}, height:{ideal:1080} },
-        audio: false
-      });
-      video.srcObject = stream;
-      await video.play();
-      canvas.width = video.videoWidth || 720;
-      canvas.height = video.videoHeight || 720;
-      statusEl.classList.add('hidden');
-      renderLoop();
-    }catch(err){
-      statusEl.innerHTML = '<div>카메라를 사용할 수 없어요.<br>브라우저 권한을 확인해주세요.</div><button id="startBtn2">다시 시도</button>';
-      statusEl.classList.remove('hidden');
-      const btn2 = document.getElementById('startBtn2');
-      if(btn2) btn2.addEventListener('click', startCamera);
+    const btn2 = document.getElementById('startBtn2');
+    if(btn2) btn2.addEventListener('click', startCamera);
+  }
+}
+
+function stopCamera(){
+  if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+  if(stream){
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+}
+
+// ---------- landmark index sets (MediaPipe FaceMesh 468/478) ----------
+const JAW_IDX = [234,93,132,58,172,136,150,149,176,148,152,377,400,378,379,365,397,288,361,323,454];
+const CHEEK_L = [50,205,187];
+const CHEEK_R = [280,425,411];
+const NOSE_ALA_L = 98, NOSE_ALA_R = 327;
+const MOUTH_CORNER_L = 61, MOUTH_CORNER_R = 291;
+const CENTER_REF_TOP = 168; // between brows
+const CENTER_REF_BOTTOM = 152; // chin
+
+function mirroredPoint(lm, W, H){
+  return { x: W - lm.x * W, y: lm.y * H };
+}
+
+function drawTriangle(dctx, image, p0, p1, p2, s0, s1, s2){
+  const denom = s0.x*(s1.y - s2.y) + s1.x*(s2.y - s0.y) + s2.x*(s0.y - s1.y);
+  if (Math.abs(denom) < 1e-6) return;
+  dctx.save();
+  dctx.beginPath();
+  dctx.moveTo(p0.x, p0.y);
+  dctx.lineTo(p1.x, p1.y);
+  dctx.lineTo(p2.x, p2.y);
+  dctx.closePath();
+  dctx.clip();
+
+  const a = (p0.x*(s1.y-s2.y) + p1.x*(s2.y-s0.y) + p2.x*(s0.y-s1.y)) / denom;
+  const b = (p0.y*(s1.y-s2.y) + p1.y*(s2.y-s0.y) + p2.y*(s0.y-s1.y)) / denom;
+  const c = (p0.x*(s2.x-s1.x) + p1.x*(s0.x-s2.x) + p2.x*(s1.x-s0.x)) / denom;
+  const d = (p0.y*(s2.x-s1.x) + p1.y*(s0.x-s2.x) + p2.y*(s1.x-s0.x)) / denom;
+  const e = (p0.x*(s1.x*s2.y-s2.x*s1.y) + p1.x*(s2.x*s0.y-s0.x*s2.y) + p2.x*(s0.x*s1.y-s1.x*s0.y)) / denom;
+  const f = (p0.y*(s1.x*s2.y-s2.x*s1.y) + p1.y*(s2.x*s0.y-s0.x*s2.y) + p2.y*(s0.x*s1.y-s1.x*s0.y)) / denom;
+
+  dctx.transform(a, b, c, d, e, f);
+  dctx.drawImage(image, 0, 0);
+  dctx.restore();
+}
+
+function smoothstep(edge0, edge1, x){
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t*t*(3 - 2*t);
+}
+
+function applyFaceWarp(landmarks, W, H, agingAmount, symmetryAmount){
+  const pts = landmarks.map(lm => mirroredPoint(lm, W, H));
+
+  // bounding box from jaw + forehead points, with margin
+  let minX = W, maxX = 0, minY = H, maxY = 0;
+  for (const p of pts){
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const marginX = (maxX - minX) * 0.18;
+  const marginY = (maxY - minY) * 0.18;
+  const boxX0 = Math.max(0, minX - marginX);
+  const boxX1 = Math.min(W, maxX + marginX);
+  const boxY0 = Math.max(0, minY - marginY);
+  const boxY1 = Math.min(H, maxY + marginY);
+  const boxW = boxX1 - boxX0;
+  const boxH = boxY1 - boxY0;
+  if (boxW <= 0 || boxH <= 0) return false;
+
+  const faceW = maxX - minX;
+  const faceH = maxY - minY;
+  const centerX = (pts[CENTER_REF_TOP].x + pts[CENTER_REF_BOTTOM].x) / 2;
+
+  // ---- control points & displacement vectors ----
+  const controls = [];
+
+  if (agingAmount > 0.001){
+    const jawShift = 0.045 * faceW * agingAmount;
+    for (const idx of JAW_IDX){
+      const p = pts[idx];
+      const dir = p.x < centerX ? 1 : -1; // pull toward center
+      const vertWeight = smoothstep(minY + faceH*0.35, minY + faceH*0.9, p.y); // more effect lower on jaw
+      controls.push({ p, d: { x: dir * jawShift * (0.4 + 0.6*vertWeight), y: -jawShift*0.15*vertWeight } });
+    }
+    const liftY = 0.032 * faceH * agingAmount;
+    const inX = 0.012 * faceW * agingAmount;
+    for (const idx of CHEEK_L){
+      const p = pts[idx];
+      controls.push({ p, d: { x: inX, y: -liftY } });
+    }
+    for (const idx of CHEEK_R){
+      const p = pts[idx];
+      controls.push({ p, d: { x: -inX, y: -liftY } });
     }
   }
 
-  function stopCamera(){
-    if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
-    if(stream){
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
+  // ---- build warp grid over bounding box ----
+  const COLS = 8, ROWS = 10;
+  const gridSrc = [];
+  const gridDst = [];
+  for (let j = 0; j <= ROWS; j++){
+    for (let i = 0; i <= COLS; i++){
+      const u = i / COLS, v = j / ROWS;
+      const sx = boxX0 + u * boxW;
+      const sy = boxY0 + v * boxH;
+      let dx = 0, dy = 0;
+      if (controls.length){
+        let wsum = 0, dxsum = 0, dysum = 0;
+        for (const c of controls){
+          const ddx = sx - c.p.x, ddy = sy - c.p.y;
+          const distSq = ddx*ddx + ddy*ddy + 60;
+          const w = 1 / distSq;
+          wsum += w; dxsum += w * c.d.x; dysum += w * c.d.y;
+        }
+        if (wsum > 0){ dx = dxsum / wsum; dy = dysum / wsum; }
+      }
+      // edge falloff so grid border matches unwarped background seamlessly
+      const edgeU = Math.min(smoothstep(0, 0.12, u), smoothstep(1, 0.88, u));
+      const edgeV = Math.min(smoothstep(0, 0.12, v), smoothstep(1, 0.88, v));
+      const falloff = edgeU * edgeV;
+      dx *= falloff; dy *= falloff;
+      gridSrc.push({ x: sx, y: sy });
+      gridDst.push({ x: sx + dx, y: sy + dy });
     }
   }
 
-  function renderLoop(){
-    if(!video.videoWidth){
-      rafId = requestAnimationFrame(renderLoop);
-      return;
+  const cols1 = COLS + 1;
+  for (let j = 0; j < ROWS; j++){
+    for (let i = 0; i < COLS; i++){
+      const i00 = j*cols1 + i, i10 = j*cols1 + i+1;
+      const i01 = (j+1)*cols1 + i, i11 = (j+1)*cols1 + i+1;
+      drawTriangle(ctx, bufB, gridDst[i00], gridDst[i10], gridDst[i01], gridSrc[i00], gridSrc[i10], gridSrc[i01]);
+      drawTriangle(ctx, bufB, gridDst[i10], gridDst[i11], gridDst[i01], gridSrc[i10], gridSrc[i11], gridSrc[i01]);
     }
-    const w = canvas.width, h = canvas.height;
+  }
 
-    const softness = parseInt(softSlider.value, 10) / 100;
-    const brightness = parseInt(brightSlider.value, 10) / 100;
-    const tone = parseInt(toneSlider.value, 10);
-
-    const baseBrightness = 1 + brightness * 0.22;
-    const baseSaturate = 1 - brightness * 0.12 + (tone < 0 ? Math.abs(tone) * 0.002 : 0);
-    const baseContrast = 1 + brightness * 0.03;
-    const hue = tone * 0.6;
-
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.clearRect(0,0,w,h);
-
-    // mirror
+  // ---- nasolabial fold soften (localized blur blend) ----
+  if (agingAmount > 0.001){
+    const foldAlpha = Math.min(0.55, agingAmount * 0.6);
     ctx.save();
-    ctx.translate(w, 0);
-    ctx.scale(-1, 1);
-
-    ctx.filter = `brightness(${baseBrightness}) contrast(${baseContrast}) saturate(${baseSaturate}) hue-rotate(${hue}deg)`;
-    ctx.drawImage(video, 0, 0, w, h);
-
-    if(softness > 0.01){
-      const blurPx = Math.max(1, softness * 10);
-      ctx.filter = `blur(${blurPx}px) brightness(${baseBrightness}) contrast(${baseContrast}) saturate(${baseSaturate}) hue-rotate(${hue}deg)`;
-      ctx.globalAlpha = Math.min(0.65, softness * 0.7);
-      ctx.drawImage(video, 0, 0, w, h);
-      ctx.globalAlpha = 1;
-    }
-
+    ctx.filter = 'blur(5px)';
+    ctx.globalAlpha = foldAlpha;
+    [[NOSE_ALA_L, CHEEK_L[1], MOUTH_CORNER_L, CHEEK_L[0]],
+     [NOSE_ALA_R, CHEEK_R[1], MOUTH_CORNER_R, CHEEK_R[0]]].forEach(idxs => {
+      ctx.beginPath();
+      idxs.forEach((idx, k) => {
+        const p = pts[idx];
+        if (k === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.clip();
+    });
+    ctx.drawImage(bufB, 0, 0);
     ctx.restore();
-    ctx.filter = 'none';
+  }
 
+  // ---- symmetry blend (mirror about face vertical midline) ----
+  if (symmetryAmount > 0.001){
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.3, symmetryAmount * 0.32);
+    ctx.translate(2*centerX, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(canvas, 0, 0);
+    ctx.restore();
+  }
+
+  return true;
+}
+
+function renderLoop(){
+  if(!video.videoWidth){
     rafId = requestAnimationFrame(renderLoop);
+    return;
+  }
+  const w = canvas.width, h = canvas.height;
+
+  const softness = parseInt(softSlider.value, 10) / 100;
+  const brightness = parseInt(brightSlider.value, 10) / 100;
+  const tone = parseInt(toneSlider.value, 10);
+  const agingAmount = aiToggle.checked && aiReady ? parseInt(agingSlider.value, 10) / 100 : 0;
+  const symmetryAmount = aiToggle.checked && aiReady ? parseInt(symmetrySlider.value, 10) / 100 : 0;
+
+  const baseBrightness = 1 + brightness * 0.22;
+  const baseSaturate = 1 - brightness * 0.12 + (tone < 0 ? Math.abs(tone) * 0.002 : 0);
+  const baseContrast = 1 + brightness * 0.03;
+  const hue = tone * 0.6;
+
+  // 1) mirrored + color-filtered raw frame -> bufA
+  bufCtxA.setTransform(1,0,0,1,0,0);
+  bufCtxA.clearRect(0,0,w,h);
+  bufCtxA.save();
+  bufCtxA.translate(w, 0);
+  bufCtxA.scale(-1, 1);
+  bufCtxA.filter = `brightness(${baseBrightness}) contrast(${baseContrast}) saturate(${baseSaturate}) hue-rotate(${hue}deg)`;
+  bufCtxA.drawImage(video, 0, 0, w, h);
+  bufCtxA.restore();
+  bufCtxA.filter = 'none';
+
+  // 2) soft-focus pass -> bufB
+  bufCtxB.setTransform(1,0,0,1,0,0);
+  bufCtxB.clearRect(0,0,w,h);
+  bufCtxB.drawImage(bufA, 0, 0);
+  if (softness > 0.01){
+    const blurPx = Math.max(1, softness * 10);
+    bufCtxB.filter = `blur(${blurPx}px)`;
+    bufCtxB.globalAlpha = Math.min(0.65, softness * 0.7);
+    bufCtxB.drawImage(bufA, 0, 0);
+    bufCtxB.globalAlpha = 1;
+    bufCtxB.filter = 'none';
   }
 
-  startBtn.addEventListener('click', startCamera);
+  // 3) draw base to visible canvas
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,w,h);
+  ctx.drawImage(bufB, 0, 0);
 
-  flipBtn.addEventListener('click', () => {
-    facingMode = (facingMode === 'user') ? 'environment' : 'user';
-    startCamera();
-  });
-
-  shutterBtn.addEventListener('click', () => {
-    if(!video.videoWidth) return;
-    lastPhotoDataUrl = canvas.toDataURL('image/png');
-    reviewImg.src = lastPhotoDataUrl;
-    reviewImg.classList.remove('hidden');
-    canvas.style.visibility = 'hidden';
-    livePanel.classList.add('hidden');
-    reviewPanel.classList.remove('hidden');
-  });
-
-  retakeBtn.addEventListener('click', () => {
-    reviewImg.classList.add('hidden');
-    canvas.style.visibility = 'visible';
-    reviewPanel.classList.add('hidden');
-    livePanel.classList.remove('hidden');
-  });
-
-  async function ensureDownloads(){
-    if(downloadsCap) return downloadsCap;
-    try{
-      if(window.claude && typeof window.claude.use === 'function'){
-        downloadsCap = await window.claude.use('downloads');
-      }
-    }catch(e){ downloadsCap = null; }
-    return downloadsCap;
-  }
-
-  saveBtn.addEventListener('click', async () => {
-    if(!lastPhotoDataUrl) return;
-    const filename = 'selfie_' + new Date().toISOString().replace(/[:.]/g,'-') + '.png';
-    const cap = await ensureDownloads();
-    if(cap){
+  // 4) AI face warp on top (if enabled + face detected)
+  if (aiToggle.checked && aiReady && faceLandmarker){
+    if (video.currentTime !== lastVideoTime){
+      lastVideoTime = video.currentTime;
       try{
-        const res = await fetch(lastPhotoDataUrl);
-        const blob = await res.blob();
-        await cap.save({ filename, data: blob });
-        showToast('사진이 저장되었어요');
-        return;
-      }catch(e){
-        // fall through to link method
-      }
+        lastResults = faceLandmarker.detectForVideo(video, performance.now());
+      }catch(e){ /* ignore transient errors */ }
     }
-    // fallback: plain link (works when not sandboxed)
-    const a = document.createElement('a');
-    a.href = lastPhotoDataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showToast('저장을 시도했어요');
-  });
+    if (lastResults && lastResults.faceLandmarks && lastResults.faceLandmarks.length){
+      applyFaceWarp(lastResults.faceLandmarks[0], w, h, agingAmount, symmetryAmount);
+    }
+  }
 
-  window.addEventListener('beforeunload', stopCamera);
-})();
+  rafId = requestAnimationFrame(renderLoop);
+}
+
+startBtn.addEventListener('click', startCamera);
+
+flipBtn.addEventListener('click', () => {
+  facingMode = (facingMode === 'user') ? 'environment' : 'user';
+  startCamera();
+});
+
+shutterBtn.addEventListener('click', () => {
+  if(!video.videoWidth) return;
+  lastPhotoDataUrl = canvas.toDataURL('image/png');
+  reviewImg.src = lastPhotoDataUrl;
+  reviewImg.classList.remove('hidden');
+  canvas.style.visibility = 'hidden';
+  livePanel.classList.add('hidden');
+  reviewPanel.classList.remove('hidden');
+});
+
+retakeBtn.addEventListener('click', () => {
+  reviewImg.classList.add('hidden');
+  canvas.style.visibility = 'visible';
+  reviewPanel.classList.add('hidden');
+  livePanel.classList.remove('hidden');
+});
+
+let downloadsCap = null;
+async function ensureDownloads(){
+  if(downloadsCap) return downloadsCap;
+  try{
+    if(window.claude && typeof window.claude.use === 'function'){
+      downloadsCap = await window.claude.use('downloads');
+    }
+  }catch(e){ downloadsCap = null; }
+  return downloadsCap;
+}
+
+saveBtn.addEventListener('click', async () => {
+  if(!lastPhotoDataUrl) return;
+  const filename = 'selfie_' + new Date().toISOString().replace(/[:.]/g,'-') + '.png';
+  const cap = await ensureDownloads();
+  if(cap){
+    try{
+      const res = await fetch(lastPhotoDataUrl);
+      const blob = await res.blob();
+      await cap.save({ filename, data: blob });
+      showToast('사진이 저장되었어요');
+      return;
+    }catch(e){ /* fall through */ }
+  }
+  const a = document.createElement('a');
+  a.href = lastPhotoDataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast('저장을 시도했어요');
+});
+
+window.addEventListener('beforeunload', stopCamera);
 </script>
 </body>
 </html>
