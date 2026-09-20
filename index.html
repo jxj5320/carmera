@@ -370,14 +370,19 @@
         <span class="val" id="toneVal">0</span>
       </div>
       <div class="slider-row ai">
-        <label for="aging">동안 보정</label>
-        <input type="range" id="aging" min="0" max="100" value="55" disabled>
-        <span class="val" id="agingVal">55</span>
+        <label for="wrinkle">팔자주름</label>
+        <input type="range" id="wrinkle" min="0" max="100" value="55" disabled>
+        <span class="val" id="wrinkleVal">55</span>
+      </div>
+      <div class="slider-row ai">
+        <label for="aging">탄력 보정</label>
+        <input type="range" id="aging" min="0" max="100" value="45" disabled>
+        <span class="val" id="agingVal">45</span>
       </div>
       <div class="slider-row ai">
         <label for="symmetry">대칭 보정</label>
-        <input type="range" id="symmetry" min="0" max="100" value="30" disabled>
-        <span class="val" id="symmetryVal">30</span>
+        <input type="range" id="symmetry" min="0" max="100" value="35" disabled>
+        <span class="val" id="symmetryVal">35</span>
       </div>
     </div>
 
@@ -427,11 +432,13 @@ const aiToggle = document.getElementById('aiToggle');
 const softSlider = document.getElementById('soft');
 const brightSlider = document.getElementById('bright');
 const toneSlider = document.getElementById('tone');
+const wrinkleSlider = document.getElementById('wrinkle');
 const agingSlider = document.getElementById('aging');
 const symmetrySlider = document.getElementById('symmetry');
 const softVal = document.getElementById('softVal');
 const brightVal = document.getElementById('brightVal');
 const toneVal = document.getElementById('toneVal');
+const wrinkleVal = document.getElementById('wrinkleVal');
 const agingVal = document.getElementById('agingVal');
 const symmetryVal = document.getElementById('symmetryVal');
 
@@ -456,29 +463,33 @@ function updateLabels(){
   softVal.textContent = softSlider.value;
   brightVal.textContent = brightSlider.value;
   toneVal.textContent = toneSlider.value;
+  wrinkleVal.textContent = wrinkleSlider.value;
   agingVal.textContent = agingSlider.value;
   symmetryVal.textContent = symmetrySlider.value;
 }
-[softSlider, brightSlider, toneSlider, agingSlider, symmetrySlider].forEach(s => s.addEventListener('input', updateLabels));
+[softSlider, brightSlider, toneSlider, wrinkleSlider, agingSlider, symmetrySlider].forEach(s => s.addEventListener('input', updateLabels));
 updateLabels();
 
 resetBtn.addEventListener('click', () => {
   softSlider.value = 55;
   brightSlider.value = 45;
   toneSlider.value = 0;
-  agingSlider.value = 55;
-  symmetrySlider.value = 30;
+  wrinkleSlider.value = 55;
+  agingSlider.value = 45;
+  symmetrySlider.value = 35;
   updateLabels();
 });
 
 aiToggle.addEventListener('change', async () => {
   if(aiToggle.checked){
+    wrinkleSlider.disabled = false;
     agingSlider.disabled = false;
     symmetrySlider.disabled = false;
     if(!aiReady && !aiLoading){
       await loadFaceLandmarker();
     }
   }else{
+    wrinkleSlider.disabled = true;
     agingSlider.disabled = true;
     symmetrySlider.disabled = true;
   }
@@ -506,6 +517,7 @@ async function loadFaceLandmarker(){
   }catch(err){
     showToast('AI 모델을 불러오지 못했어요. 인터넷 연결을 확인해주세요.');
     aiToggle.checked = false;
+    wrinkleSlider.disabled = true;
     agingSlider.disabled = true;
     symmetrySlider.disabled = true;
   }
@@ -554,6 +566,11 @@ const NOSE_ALA_L = 98, NOSE_ALA_R = 327;
 const MOUTH_CORNER_L = 61, MOUTH_CORNER_R = 291;
 const CENTER_REF_TOP = 168; // between brows
 const CENTER_REF_BOTTOM = 152; // chin
+const SYM_PAIRS = [
+  [234,454],[93,323],[132,361],[58,288],[172,397],[136,365],
+  [150,379],[149,378],[176,400],[148,377],
+  [50,280],[205,425],[187,411],[98,327],[61,291],[33,263],[133,362]
+];
 
 function mirroredPoint(lm, W, H){
   return { x: W - lm.x * W, y: lm.y * H };
@@ -587,7 +604,7 @@ function smoothstep(edge0, edge1, x){
   return t*t*(3 - 2*t);
 }
 
-function applyFaceWarp(landmarks, W, H, agingAmount, symmetryAmount){
+function applyFaceWarp(landmarks, W, H, liftAmount, wrinkleAmount, symmetryAmount){
   const pts = landmarks.map(lm => mirroredPoint(lm, W, H));
 
   // bounding box from jaw + forehead points, with margin
@@ -615,16 +632,16 @@ function applyFaceWarp(landmarks, W, H, agingAmount, symmetryAmount){
   // ---- control points & displacement vectors ----
   const controls = [];
 
-  if (agingAmount > 0.001){
-    const jawShift = 0.045 * faceW * agingAmount;
+  if (liftAmount > 0.001){
+    const jawShift = 0.045 * faceW * liftAmount;
     for (const idx of JAW_IDX){
       const p = pts[idx];
       const dir = p.x < centerX ? 1 : -1; // pull toward center
       const vertWeight = smoothstep(minY + faceH*0.35, minY + faceH*0.9, p.y); // more effect lower on jaw
       controls.push({ p, d: { x: dir * jawShift * (0.4 + 0.6*vertWeight), y: -jawShift*0.15*vertWeight } });
     }
-    const liftY = 0.032 * faceH * agingAmount;
-    const inX = 0.012 * faceW * agingAmount;
+    const liftY = 0.032 * faceH * liftAmount;
+    const inX = 0.012 * faceW * liftAmount;
     for (const idx of CHEEK_L){
       const p = pts[idx];
       controls.push({ p, d: { x: inX, y: -liftY } });
@@ -632,6 +649,22 @@ function applyFaceWarp(landmarks, W, H, agingAmount, symmetryAmount){
     for (const idx of CHEEK_R){
       const p = pts[idx];
       controls.push({ p, d: { x: -inX, y: -liftY } });
+    }
+  }
+
+  // face recentering: nudge left/right pairs toward the true midline together
+  // (translates both sides by the same amount, so width/spacing is preserved —
+  //  reduces the "turned to one side" look without distorting features)
+  if (symmetryAmount > 0.001){
+    const maxShift = 0.07 * faceW;
+    for (const [li, ri] of SYM_PAIRS){
+      const L = pts[li], R = pts[ri];
+      const mid = (L.x + R.x) / 2;
+      let offset = mid - centerX;
+      offset = Math.max(-maxShift, Math.min(maxShift, offset));
+      const correction = -offset * symmetryAmount * 0.7;
+      controls.push({ p: L, d: { x: correction, y: 0 } });
+      controls.push({ p: R, d: { x: correction, y: 0 } });
     }
   }
 
@@ -675,9 +708,33 @@ function applyFaceWarp(landmarks, W, H, agingAmount, symmetryAmount){
     }
   }
 
+  // ---- neck wrinkle soften (area below chin, texture blur blend) ----
+  if (wrinkleAmount > 0.001){
+    const chin = pts[152];
+    const jawL = pts[172];
+    const jawR = pts[397];
+    const neckHeight = faceH * 0.55;
+    const taper = 0.2;
+    const bottomLeft = { x: chin.x + (jawL.x - chin.x) * (1 - taper), y: chin.y + neckHeight };
+    const bottomRight = { x: chin.x + (jawR.x - chin.x) * (1 - taper), y: chin.y + neckHeight };
+    const neckAlpha = Math.min(0.6, wrinkleAmount * 0.65);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(jawL.x, jawL.y);
+    ctx.lineTo(jawR.x, jawR.y);
+    ctx.lineTo(bottomRight.x, bottomRight.y);
+    ctx.lineTo(bottomLeft.x, bottomLeft.y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.filter = 'blur(9px)';
+    ctx.globalAlpha = neckAlpha;
+    ctx.drawImage(bufB, 0, 0);
+    ctx.restore();
+  }
+
   // ---- nasolabial fold soften (localized blur blend) ----
-  if (agingAmount > 0.001){
-    const foldAlpha = Math.min(0.55, agingAmount * 0.6);
+  if (wrinkleAmount > 0.001){
+    const foldAlpha = Math.min(0.55, wrinkleAmount * 0.6);
     ctx.save();
     ctx.filter = 'blur(5px)';
     ctx.globalAlpha = foldAlpha;
@@ -695,16 +752,6 @@ function applyFaceWarp(landmarks, W, H, agingAmount, symmetryAmount){
     ctx.restore();
   }
 
-  // ---- symmetry blend (mirror about face vertical midline) ----
-  if (symmetryAmount > 0.001){
-    ctx.save();
-    ctx.globalAlpha = Math.min(0.3, symmetryAmount * 0.32);
-    ctx.translate(2*centerX, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(canvas, 0, 0);
-    ctx.restore();
-  }
-
   return true;
 }
 
@@ -719,6 +766,7 @@ function renderLoop(){
   const brightness = parseInt(brightSlider.value, 10) / 100;
   const tone = parseInt(toneSlider.value, 10);
   const agingAmount = aiToggle.checked && aiReady ? parseInt(agingSlider.value, 10) / 100 : 0;
+  const wrinkleAmount = aiToggle.checked && aiReady ? parseInt(wrinkleSlider.value, 10) / 100 : 0;
   const symmetryAmount = aiToggle.checked && aiReady ? parseInt(symmetrySlider.value, 10) / 100 : 0;
 
   const baseBrightness = 1 + brightness * 0.12;
@@ -773,7 +821,7 @@ function renderLoop(){
       }catch(e){ /* ignore transient errors */ }
     }
     if (lastResults && lastResults.faceLandmarks && lastResults.faceLandmarks.length){
-      applyFaceWarp(lastResults.faceLandmarks[0], w, h, agingAmount, symmetryAmount);
+      applyFaceWarp(lastResults.faceLandmarks[0], w, h, agingAmount, wrinkleAmount, symmetryAmount);
     }
   }
 
