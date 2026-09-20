@@ -452,6 +452,8 @@ let aiReady = false;
 let aiLoading = false;
 let lastVideoTime = -1;
 let lastResults = null;
+let noFaceSinceMs = null;
+let lastNoFaceToastAt = 0;
 
 function showToast(msg){
   toastEl.textContent = msg;
@@ -734,20 +736,20 @@ function applyFaceWarp(landmarks, W, H, liftAmount, wrinkleAmount, symmetryAmoun
 
   // ---- nasolabial fold soften (localized blur blend) ----
   if (wrinkleAmount > 0.001){
-    const foldAlpha = Math.min(0.55, wrinkleAmount * 0.6);
+    const foldAlpha = Math.min(0.8, 0.15 + wrinkleAmount * 0.75);
     ctx.save();
-    ctx.filter = 'blur(5px)';
-    ctx.globalAlpha = foldAlpha;
+    ctx.beginPath();
     [[NOSE_ALA_L, CHEEK_L[1], MOUTH_CORNER_L, CHEEK_L[0]],
      [NOSE_ALA_R, CHEEK_R[1], MOUTH_CORNER_R, CHEEK_R[0]]].forEach(idxs => {
-      ctx.beginPath();
       idxs.forEach((idx, k) => {
         const p = pts[idx];
         if (k === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
       });
       ctx.closePath();
-      ctx.clip();
     });
+    ctx.clip();
+    ctx.filter = 'blur(8px)';
+    ctx.globalAlpha = foldAlpha;
     ctx.drawImage(bufB, 0, 0);
     ctx.restore();
   }
@@ -820,8 +822,17 @@ function renderLoop(){
         lastResults = faceLandmarker.detectForVideo(video, performance.now());
       }catch(e){ /* ignore transient errors */ }
     }
-    if (lastResults && lastResults.faceLandmarks && lastResults.faceLandmarks.length){
+    const hasFace = lastResults && lastResults.faceLandmarks && lastResults.faceLandmarks.length;
+    if (hasFace){
+      noFaceSinceMs = null;
       applyFaceWarp(lastResults.faceLandmarks[0], w, h, agingAmount, wrinkleAmount, symmetryAmount);
+    } else {
+      const now = performance.now();
+      if (noFaceSinceMs === null) noFaceSinceMs = now;
+      if (now - noFaceSinceMs > 1200 && now - lastNoFaceToastAt > 4000){
+        showToast('얼굴이 잘 인식되지 않아요. 눈·코·입이 화면에 보이게 해주세요');
+        lastNoFaceToastAt = now;
+      }
     }
   }
 
@@ -886,6 +897,16 @@ saveBtn.addEventListener('click', async () => {
 });
 
 window.addEventListener('beforeunload', stopCamera);
+
+function syncPanelHeight(){
+  if (livePanel.offsetHeight > 0){
+    reviewPanel.style.minHeight = livePanel.offsetHeight + 'px';
+  }
+}
+window.addEventListener('resize', syncPanelHeight);
+window.addEventListener('load', syncPanelHeight);
+syncPanelHeight();
+setTimeout(syncPanelHeight, 300);
 </script>
 </body>
 </html>
